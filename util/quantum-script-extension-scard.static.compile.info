@@ -1,0 +1,7 @@
+--lib qse-scard
+--project-base=quantum-script-extension-scard
+--source-is-separate
+--use-project=quantum-script.static
+--use-lib=winscard
+--install-dev
+--install-inc=quantum-script-extension
