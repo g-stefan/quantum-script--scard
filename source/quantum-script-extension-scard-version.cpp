@@ -15,10 +15,10 @@ namespace Quantum {
 			namespace SCard {
 				namespace Version {
 
-					static const char *version_ = "1.0.0";
-					static const char *build_ = "32";
-					static const char *versionWithBuild_ = "1.0.0.32";
-					static const char *datetime_ = "2019-05-13 02:59:53";
+					static const char *version_ = "1.1.0";
+					static const char *build_ = "2";
+					static const char *versionWithBuild_ = "1.1.0.2";
+					static const char *datetime_ = "2020-09-21 17:40:12";
 
 					const char *version() {
 						return version_;
