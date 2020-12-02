@@ -148,18 +148,20 @@ namespace Quantum {
 							&pcchReaders
 						);
 					if(retV == SCARD_S_SUCCESS) {
-						int count_;
-						count_ = 0;
-						mszReader = mszReaders;
-						while(*mszReader != 0) {
-							(strList->operatorIndex(count_))=VariableString::newVariable(mszReader);
-							++count_;
-							mszReader += strlen(mszReader) + 1;
+						if(mszReaders != NULL) {
+							int count_;
+							count_ = 0;
+							mszReader = mszReaders;
+							while(*mszReader != 0) {
+								(strList->operatorIndex(count_))=VariableString::newVariable(mszReader);
+								++count_;
+								mszReader += strlen(mszReader) + 1;
+							};
+							SCardFreeMemory(
+								((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
+								mszReaders
+							);
 						};
-						SCardFreeMemory(
-							((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
-							mszReaders
-						);
 					};
 					return strList;
 				};
@@ -303,7 +305,9 @@ namespace Quantum {
 
 					inScan = (arguments->index(1))->toString();
 					for(sendLength = 0; sendLength < (inScan.length() / 2); ++sendLength) {
-						sscanf((char *)(inScan.index(sendLength * 2)), "%02X", &byteScan);
+						if(sscanf((char *)(inScan.index(sendLength * 2)), "%02X", &byteScan) !=1 ){
+							byteScan = 0;
+						};
 						sendBuffer[sendLength] = byteScan;
 					};
 
