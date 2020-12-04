@@ -5,7 +5,7 @@ rem Created by Grigore Stefan <g_stefan@yahoo.com>
 
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-echo -^> git-release-check quantum-script-extension-scard
+echo -^> github-release-check quantum-script-extension-scard
 
 set PROJECT=quantum-script-extension-scard
 if not exist source\%PROJECT%.version.ini echo Error - no version & exit 1
