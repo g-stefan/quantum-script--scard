@@ -153,7 +153,7 @@ namespace Quantum {
 							count_ = 0;
 							mszReader = mszReaders;
 							while(*mszReader != 0) {
-								(strList->operatorIndex(count_))=VariableString::newVariable(mszReader);
+								strList->setPropertyByIndex(count_,VariableString::newVariable(mszReader));
 								++count_;
 								mszReader += strlen(mszReader) + 1;
 							};
