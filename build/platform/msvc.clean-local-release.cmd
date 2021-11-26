@@ -3,6 +3,6 @@ rem Public domain
 rem http://unlicense.org/
 rem Created by Grigore Stefan <g_stefan@yahoo.com>
 
-echo -^> version quantum-script-extension-scard
+echo - %BUILD_PROJECT% ^> clean-local-release
 
-xyo-cc --mode=version quantum-script-extension-scard
+if exist release\ rmdir /Q /S release

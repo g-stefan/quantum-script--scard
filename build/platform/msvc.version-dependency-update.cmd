@@ -3,4 +3,6 @@ rem Public domain
 rem http://unlicense.org/
 rem Created by Grigore Stefan <g_stefan@yahoo.com>
 
-echo -^> vendor quantum-script-extension-scard
+echo - %BUILD_PROJECT% ^> version-dependency-update
+
+xyo-cc --update-version-dependency %BUILD_PROJECT%
