@@ -14,15 +14,15 @@
 #include <string.h>
 
 #ifdef XYO_OS_TYPE_WIN
-#ifdef XYO_MEMORY_LEAK_DETECTOR
-#include "vld.h"
-#endif
+#	ifdef XYO_MEMORY_LEAK_DETECTOR
+#		include "vld.h"
+#	endif
 #endif
 
 #include "quantum-script-extension-scard-license.hpp"
 #include "quantum-script-extension-scard.hpp"
 #ifndef QUANTUM_SCRIPT_EXTENSION_SCARD_NO_VERSION
-#include "quantum-script-extension-scard-version.hpp"
+#	include "quantum-script-extension-scard-version.hpp"
 #endif
 
 #include "quantum-script-variableresource.hpp"
@@ -38,9 +38,9 @@ namespace Quantum {
 
 				using namespace XYO;
 
-				class  SCardContext:
-					public Object {
+				class SCardContext : public Object {
 						XYO_DISALLOW_COPY_ASSIGN_MOVE(SCardContext);
+
 					public:
 						SCARDCONTEXT context;
 						bool isOk;
@@ -54,17 +54,16 @@ namespace Quantum {
 						};
 
 						inline void close() {
-							if(isOk) {
+							if (isOk) {
 								isOk = false;
 								SCardReleaseContext(context);
 							};
 						};
 				};
 
-
-				class  SCardHandle:
-					public Object {
+				class SCardHandle : public Object {
 						XYO_DISALLOW_COPY_ASSIGN_MOVE(SCardHandle);
+
 					public:
 						SCARDHANDLE handle;
 						DWORD dwActiveProtocol;
@@ -79,13 +78,12 @@ namespace Quantum {
 						};
 
 						inline void close() {
-							if(isOk) {
+							if (isOk) {
 								isOk = false;
 								SCardDisconnect(handle, SCARD_UNPOWER_CARD);
 							};
 						};
 				};
-
 
 				static void sCardContextDelete(void *value) {
 					((SCardContext *)value)->decReferenceCount();
@@ -94,7 +92,6 @@ namespace Quantum {
 				static void sCardHandleDelete(void *value) {
 					((SCardHandle *)value)->decReferenceCount();
 				};
-
 
 				static TPointer<Variable> establishContext(VariableFunction *function, Variable *this_, VariableArray *arguments) {
 #ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
@@ -105,13 +102,12 @@ namespace Quantum {
 					sCardContext.newMemory();
 
 					retV = SCardEstablishContext(
-							SCARD_SCOPE_USER,
-							NULL,
-							NULL,
-							&sCardContext->context
-						);
+					    SCARD_SCOPE_USER,
+					    NULL,
+					    NULL,
+					    &sCardContext->context);
 
-					if(retV == SCARD_S_SUCCESS) {
+					if (retV == SCARD_S_SUCCESS) {
 						sCardContext->isOk = true;
 						sCardContext->incReferenceCount();
 						return VariableResource::newVariable(sCardContext.value(), sCardContextDelete);
@@ -124,7 +120,7 @@ namespace Quantum {
 #ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
 					printf("- scard-release-context\n");
 #endif
-					((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->close();
+					((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->close();
 					return VariableBoolean::newVariable(true);
 				};
 
@@ -142,30 +138,27 @@ namespace Quantum {
 					mszReaders = NULL;
 					pcchReaders = SCARD_AUTOALLOCATE;
 					retV = SCardListReaders(
-							((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
-							NULL,
-							(LPSTR)&mszReaders,
-							&pcchReaders
-						);
-					if(retV == SCARD_S_SUCCESS) {
-						if(mszReaders != NULL) {
+					    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+					    NULL,
+					    (LPSTR)&mszReaders,
+					    &pcchReaders);
+					if (retV == SCARD_S_SUCCESS) {
+						if (mszReaders != NULL) {
 							int count_;
 							count_ = 0;
 							mszReader = mszReaders;
-							while(*mszReader != 0) {
-								strList->setPropertyByIndex(count_,VariableString::newVariable(mszReader));
+							while (*mszReader != 0) {
+								strList->setPropertyByIndex(count_, VariableString::newVariable(mszReader));
 								++count_;
 								mszReader += strlen(mszReader) + 1;
 							};
 							SCardFreeMemory(
-								((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
-								mszReaders
-							);
+							    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+							    mszReaders);
 						};
 					};
 					return strList;
 				};
-
 
 				static TPointer<Variable> getStatusChange(VariableFunction *function, Variable *this_, VariableArray *arguments) {
 #ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
@@ -182,16 +175,14 @@ namespace Quantum {
 					rgReaderStates.dwCurrentState = SCARD_STATE_UNAWARE;
 					rgReaderStates.dwEventState = SCARD_STATE_UNAWARE;
 
-
 					retV = SCardGetStatusChange(
-							((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
-							10,
-							&rgReaderStates,
-							1
-						);
+					    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+					    10,
+					    &rgReaderStates,
+					    1);
 
-					if(retV == SCARD_S_SUCCESS) {
-						if((rgReaderStates.dwEventState & SCARD_STATE_PRESENT) == SCARD_STATE_PRESENT) {
+					if (retV == SCARD_S_SUCCESS) {
+						if ((rgReaderStates.dwEventState & SCARD_STATE_PRESENT) == SCARD_STATE_PRESENT) {
 							return VariableBoolean::newVariable(true);
 						};
 					};
@@ -210,14 +201,13 @@ namespace Quantum {
 					handle.newMemory();
 
 					retV = SCardConnect(
-							((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context,
-							(char *)(((arguments->index(1))->toString()).value()),
-							SCARD_SHARE_EXCLUSIVE,
-							SCARD_PROTOCOL_Tx,
-							&handle->handle,
-							&handle->dwActiveProtocol
-						);
-					if(retV == SCARD_S_SUCCESS) {
+					    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+					    (char *)(((arguments->index(1))->toString()).value()),
+					    SCARD_SHARE_EXCLUSIVE,
+					    SCARD_PROTOCOL_Tx,
+					    &handle->handle,
+					    &handle->dwActiveProtocol);
+					if (retV == SCARD_S_SUCCESS) {
 						handle->isOk = true;
 						handle->incReferenceCount();
 						return VariableResource::newVariable(handle.value(), NULL);
@@ -231,10 +221,9 @@ namespace Quantum {
 					printf("- scard-disconnect\n");
 #endif
 
-					((SCardHandle *) (((VariableResource *) (arguments->index(0)).value() )->resource))->close();
+					((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->close();
 					return VariableBoolean::newVariable(true);
 				};
-
 
 				static TPointer<Variable> getAtrString(VariableFunction *function, Variable *this_, VariableArray *arguments) {
 #ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
@@ -249,26 +238,24 @@ namespace Quantum {
 					pbAttr = NULL;
 					pcbAttrLen = SCARD_AUTOALLOCATE;
 					retV = SCardGetAttrib(
-							((SCardHandle *) (((VariableResource *) (arguments->index(1)).value() )->resource))->handle,
-							SCARD_ATTR_ATR_STRING,
-							(LPBYTE)&pbAttr,
-							&pcbAttrLen
-						);
-					if(retV == SCARD_S_SUCCESS) {
+					    ((SCardHandle *)(((VariableResource *)(arguments->index(1)).value())->resource))->handle,
+					    SCARD_ATTR_ATR_STRING,
+					    (LPBYTE)&pbAttr,
+					    &pcbAttrLen);
+					if (retV == SCARD_S_SUCCESS) {
 						char buf[4];
 						int k;
 						Variable *strValue = VariableString::newVariable("");
-						for(k = 0; k < pcbAttrLen; ++k) {
+						for (k = 0; k < pcbAttrLen; ++k) {
 							byteScan = pbAttr[k];
 							sprintf(buf, "%02X", byteScan);
 							((VariableString *)strValue)->value << (&buf[0]);
 						};
-						SCardFreeMemory(((SCardContext *) (((VariableResource *) (arguments->index(0)).value() )->resource))->context, pbAttr);
+						SCardFreeMemory(((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context, pbAttr);
 						return strValue;
 					};
 					return VariableUndefined::newVariable();
 				};
-
 
 				static TPointer<Variable> transmit(VariableFunction *function, Variable *this_, VariableArray *arguments) {
 #ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
@@ -286,26 +273,26 @@ namespace Quantum {
 					unsigned int byteScan;
 					SCARD_IO_REQUEST pioSendPciIO;
 
-					dwActiveProtocol = ((SCardHandle *) (((VariableResource *) (arguments->index(0)).value() )->resource))->dwActiveProtocol;
+					dwActiveProtocol = ((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->dwActiveProtocol;
 
-					switch(dwActiveProtocol) {
-						case SCARD_PROTOCOL_T0:
-							pioSendPci = SCARD_PCI_T0;
-							pioSendPciIO = *SCARD_PCI_T0;
-							break;
-						case SCARD_PROTOCOL_T1:
-							pioSendPci = SCARD_PCI_T1;
-							pioSendPciIO = *SCARD_PCI_T1;
-							break;
-						default:
-							pioSendPci = SCARD_PCI_RAW;
-							pioSendPciIO = *SCARD_PCI_RAW;
-							break;
+					switch (dwActiveProtocol) {
+					case SCARD_PROTOCOL_T0:
+						pioSendPci = SCARD_PCI_T0;
+						pioSendPciIO = *SCARD_PCI_T0;
+						break;
+					case SCARD_PROTOCOL_T1:
+						pioSendPci = SCARD_PCI_T1;
+						pioSendPciIO = *SCARD_PCI_T1;
+						break;
+					default:
+						pioSendPci = SCARD_PCI_RAW;
+						pioSendPciIO = *SCARD_PCI_RAW;
+						break;
 					};
 
 					inScan = (arguments->index(1))->toString();
-					for(sendLength = 0; sendLength < (inScan.length() / 2); ++sendLength) {
-						if(sscanf((char *)(inScan.index(sendLength * 2)), "%02X", &byteScan) !=1 ){
+					for (sendLength = 0; sendLength < (inScan.length() / 2); ++sendLength) {
+						if (sscanf((char *)(inScan.index(sendLength * 2)), "%02X", &byteScan) != 1) {
 							byteScan = 0;
 						};
 						sendBuffer[sendLength] = byteScan;
@@ -314,19 +301,18 @@ namespace Quantum {
 					recvLength = 4096;
 
 					retV = SCardTransmit(
-							((SCardHandle *) (((VariableResource *) (arguments->index(0)).value() )->resource))->handle,
-							pioSendPci,
-							sendBuffer,
-							sendLength,
-							&pioSendPciIO,
-							recvBuffer,
-							&recvLength
-						);
-					if(retV == SCARD_S_SUCCESS) {
+					    ((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->handle,
+					    pioSendPci,
+					    sendBuffer,
+					    sendLength,
+					    &pioSendPciIO,
+					    recvBuffer,
+					    &recvLength);
+					if (retV == SCARD_S_SUCCESS) {
 						char buf[4];
 						int k;
 						Variable *strValue = VariableString::newVariable("");
-						for(k = 0; k < recvLength; ++k) {
+						for (k = 0; k < recvLength; ++k) {
 							byteScan = recvBuffer[k];
 							sprintf((char *)buf, "%02X", byteScan);
 							((VariableString *)strValue)->value << buf;
@@ -357,7 +343,6 @@ namespace Quantum {
 					executive->setFunction2("SCard.disconect(card)", disconnect);
 					executive->setFunction2("SCard.getAtrString(context,card)", getAtrString);
 					executive->setFunction2("SCard.transmit(card,string)", transmit);
-
 				};
 
 			};
@@ -370,4 +355,3 @@ extern "C" QUANTUM_SCRIPT_EXTENSION_SCARD_EXPORT void quantumScriptExtension(Qua
 	Quantum::Script::Extension::SCard::initExecutive(executive, extensionId);
 };
 #endif
-

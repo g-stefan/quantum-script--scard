@@ -11,23 +11,23 @@
 #define QUANTUM_SCRIPT_EXTENSION_SCARD_HPP
 
 #ifndef QUANTUM_SCRIPT_HPP
-#include "quantum-script.hpp"
+#	include "quantum-script.hpp"
 #endif
 
 #ifndef QUANTUM_SCRIPT_EXTENSION_SCARD__EXPORT_HPP
-#include "quantum-script-extension-scard--export.hpp"
+#	include "quantum-script-extension-scard--export.hpp"
 #endif
 
 #ifndef QUANTUM_SCRIPT_EXTENSION_SCARD_COPYRIGHT_HPP
-#include "quantum-script-extension-scard-copyright.hpp"
+#	include "quantum-script-extension-scard-copyright.hpp"
 #endif
 
 #ifndef QUANTUM_SCRIPT_EXTENSION_SCARD_LICENSE_HPP
-#include "quantum-script-extension-scard-license.hpp"
+#	include "quantum-script-extension-scard-license.hpp"
 #endif
 
 #ifndef QUANTUM_SCRIPT_EXTENSION_SCARD_VERSION_HPP
-#include "quantum-script-extension-scard-version.hpp"
+#	include "quantum-script-extension-scard-version.hpp"
 #endif
 
 namespace Quantum {
