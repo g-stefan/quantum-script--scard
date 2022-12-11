@@ -1,0 +1,19 @@
+{
+	"project": {
+		"name":"quantum-script--scard",
+		"type":"xyo-cpp",
+		"make" : "lib-and-dll",
+		"SPDX-License-Identifier": "MIT",
+		"sourcePath" : "XYO/QuantumScript.Extension/SCard",
+		"testSource" : [
+			"test.01"
+		],
+		"dependency" : [
+			"quantum-script",
+			"quantum-script--console"			
+		],
+		"library" : [
+			"winscard"
+		]
+	}
+}

@@ -1,9 +1,0 @@
---dll qse-scard
---project-base=quantum-script-extension-scard
---build-include
---dll-no-version
---use-project=quantum-script
---use-lib=winscard
---install-dev
---install-inc=quantum-script-extension
---no-version
