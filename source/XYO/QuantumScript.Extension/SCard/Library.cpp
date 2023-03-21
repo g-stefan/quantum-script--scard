@@ -313,7 +313,7 @@ namespace XYO::QuantumScript::Extension::SCard {
 
 	void initExecutive(Executive *executive, void *extensionId) {
 		String info = "SCard\r\n";
-		info << License::shortLicense();
+		info << License::shortLicense().c_str();
 
 		executive->setExtensionName(extensionId, "SCard");
 		executive->setExtensionInfo(extensionId, info);

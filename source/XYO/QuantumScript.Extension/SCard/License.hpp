@@ -13,8 +13,8 @@
 
 namespace XYO::QuantumScript::Extension::SCard::License {
 
-	XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT const char *license();
-	XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT const char *shortLicense();
+	XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT std::string license();
+	XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT std::string shortLicense();
 
 };
 
