@@ -24,7 +24,7 @@
 namespace XYO::QuantumScript::Extension::SCard {
 
 	class SCardContext : public Object {
-			XYO_DISALLOW_COPY_ASSIGN_MOVE(SCardContext);
+			XYO_PLATFORM_DISALLOW_COPY_ASSIGN_MOVE(SCardContext);
 
 		public:
 			SCARDCONTEXT context;
@@ -47,7 +47,7 @@ namespace XYO::QuantumScript::Extension::SCard {
 	};
 
 	class SCardHandle : public Object {
-			XYO_DISALLOW_COPY_ASSIGN_MOVE(SCardHandle);
+			XYO_PLATFORM_DISALLOW_COPY_ASSIGN_MOVE(SCardHandle);
 
 		public:
 			SCARDHANDLE handle;
@@ -333,7 +333,7 @@ namespace XYO::QuantumScript::Extension::SCard {
 
 };
 
-#ifdef XYO_COMPILE_DYNAMIC_LIBRARY
+#ifdef XYO_PLATFORM_COMPILE_DYNAMIC_LIBRARY
 extern "C" XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT void quantumScriptExtension(XYO::QuantumScript::Executive *executive, void *extensionId) {
 	XYO::QuantumScript::Extension::SCard::initExecutive(executive, extensionId);
 };
