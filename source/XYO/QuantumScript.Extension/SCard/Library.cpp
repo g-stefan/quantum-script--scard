@@ -333,8 +333,10 @@ namespace XYO::QuantumScript::Extension::SCard {
 
 };
 
-#ifdef XYO_PLATFORM_COMPILE_DYNAMIC_LIBRARY
+#ifndef XYO_QUANTUMSCRIPT_EXTENSION_SCARD_LIBRARY
+#	ifdef XYO_PLATFORM_COMPILE_DYNAMIC_LIBRARY
 extern "C" XYO_QUANTUMSCRIPT_EXTENSION_SCARD_EXPORT void quantumScriptExtension(XYO::QuantumScript::Executive *executive, void *extensionId) {
 	XYO::QuantumScript::Extension::SCard::initExecutive(executive, extensionId);
 };
+#	endif
 #endif
