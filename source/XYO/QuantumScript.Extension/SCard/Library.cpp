@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
+
+#include <vector>
 
 #ifdef XYO_OS_TYPE_WIN
 #	ifdef XYO_MEMORY_LEAK_DETECTOR
@@ -22,6 +25,11 @@
 #include <XYO/QuantumScript.Extension/SCard/Version.hpp>
 
 namespace XYO::QuantumScript::Extension::SCard {
+
+	// Extended APDU: header (4) + Lc (3) + data (65535) + Le (2)
+	static const size_t transmitSendMax = 65544;
+	// Extended APDU response: data (65536) + SW1 SW2 (2)
+	static const size_t transmitReceiveMax = 65538;
 
 	class SCardContext : public Object {
 			XYO_PLATFORM_DISALLOW_COPY_ASSIGN_MOVE(SCardContext);
@@ -50,6 +58,8 @@ namespace XYO::QuantumScript::Extension::SCard {
 			XYO_PLATFORM_DISALLOW_COPY_ASSIGN_MOVE(SCardHandle);
 
 		public:
+			// Context used to connect, kept alive while the card handle exists
+			TPointer<SCardContext> sCardContext;
 			SCARDHANDLE handle;
 			DWORD dwActiveProtocol;
 			bool isOk;
@@ -78,8 +88,85 @@ namespace XYO::QuantumScript::Extension::SCard {
 		((SCardHandle *)value)->decReferenceCount();
 	};
 
+	// The resource delete procedure identifies the kind of resource,
+	// any other value (or a closed resource) is rejected
+
+	static bool isResourceOf(Variable *value, VariableResource::ResourceDelete resourceDelete) {
+		if (!TIsType<VariableResource>(value)) {
+			return false;
+		};
+		if (((VariableResource *)value)->resource == nullptr) {
+			return false;
+		};
+		return (((VariableResource *)value)->resourceDelete == resourceDelete);
+	};
+
+	static SCardContext *getContext(Variable *value) {
+		if (!isResourceOf(value, sCardContextDelete)) {
+			throw(Error("invalid parameter"));
+		};
+		return (SCardContext *)(((VariableResource *)value)->resource);
+	};
+
+	static SCardHandle *getHandle(Variable *value) {
+		if (!isResourceOf(value, sCardHandleDelete)) {
+			throw(Error("invalid parameter"));
+		};
+		return (SCardHandle *)(((VariableResource *)value)->resource);
+	};
+
+	static int hexDigit(char value) {
+		if ((value >= '0') && (value <= '9')) {
+			return value - '0';
+		};
+		if ((value >= 'A') && (value <= 'F')) {
+			return value - 'A' + 10;
+		};
+		if ((value >= 'a') && (value <= 'f')) {
+			return value - 'a' + 10;
+		};
+		return -1;
+	};
+
+	// Hex digits, whitespace between them is ignored
+	static bool hexDecode(const String &in, std::vector<BYTE> &out) {
+		const char *scan = in.value();
+		int high = -1;
+		int digit;
+		for (; *scan != 0; ++scan) {
+			if ((*scan == ' ') || (*scan == '\t') || (*scan == '\r') || (*scan == '\n')) {
+				continue;
+			};
+			digit = hexDigit(*scan);
+			if (digit < 0) {
+				return false;
+			};
+			if (high < 0) {
+				high = digit;
+				continue;
+			};
+			out.push_back((BYTE)((high << 4) | digit));
+			high = -1;
+		};
+		return (high < 0);
+	};
+
+	static String hexEncode(const BYTE *in, size_t length) {
+		static const char *hex = "0123456789ABCDEF";
+		String retV;
+		char buf[3];
+		size_t k;
+		buf[2] = 0;
+		for (k = 0; k < length; ++k) {
+			buf[0] = hex[(in[k] >> 4) & 0x0F];
+			buf[1] = hex[in[k] & 0x0F];
+			retV << buf;
+		};
+		return retV;
+	};
+
 	static TPointer<Variable> establishContext(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-establish-context\n");
 #endif
 		LONG retV;
@@ -102,30 +189,36 @@ namespace XYO::QuantumScript::Extension::SCard {
 	};
 
 	static TPointer<Variable> releaseContext(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-release-context\n");
 #endif
-		((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->close();
+		getContext(arguments->index(0))->close();
 		return VariableBoolean::newVariable(true);
 	};
 
 	static TPointer<Variable> listReaders(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-list-readers\n");
 #endif
 		LONG retV;
 		TPointer<Variable> strList;
-		LPSTR mszReaders;
-		LPSTR mszReader;
+		LPWSTR mszReaders;
+		LPWSTR mszReader;
 		DWORD pcchReaders;
+		SCardContext *sCardContext;
 
+		sCardContext = getContext(arguments->index(0));
 		strList = VariableArray::newVariable();
+		if (!sCardContext->isOk) {
+			return strList;
+		};
+
 		mszReaders = NULL;
 		pcchReaders = SCARD_AUTOALLOCATE;
-		retV = SCardListReaders(
-		    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+		retV = SCardListReadersW(
+		    sCardContext->context,
 		    NULL,
-		    (LPSTR)&mszReaders,
+		    (LPWSTR)&mszReaders,
 		    &pcchReaders);
 		if (retV == SCARD_S_SUCCESS) {
 			if (mszReaders != NULL) {
@@ -133,35 +226,40 @@ namespace XYO::QuantumScript::Extension::SCard {
 				count_ = 0;
 				mszReader = mszReaders;
 				while (*mszReader != 0) {
-					strList->setPropertyByIndex(count_, VariableString::newVariable(mszReader));
+					strList->setPropertyByIndex(count_, VariableString::newVariable(UTF::utf8FromUTF16((const utf16 *)mszReader)));
 					++count_;
-					mszReader += strlen(mszReader) + 1;
+					mszReader += wcslen(mszReader) + 1;
 				};
-				SCardFreeMemory(
-				    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
-				    mszReaders);
+				SCardFreeMemory(sCardContext->context, mszReaders);
 			};
 		};
 		return strList;
 	};
 
 	static TPointer<Variable> getStatusChange(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-get-status-change\n");
 #endif
 
 		LONG retV;
-		CHAR szReader[256];
-		SCARD_READERSTATE rgReaderStates;
+		SCARD_READERSTATEW rgReaderStates;
+		SCardContext *sCardContext;
+		StringUTF16 reader;
 
-		strcpy(szReader, (char *)(((arguments->index(1))->toString()).value()));
+		sCardContext = getContext(arguments->index(0));
+		if (!sCardContext->isOk) {
+			return VariableBoolean::newVariable(false);
+		};
 
-		rgReaderStates.szReader = szReader;
+		reader = UTF::utf16FromUTF8((arguments->index(1))->toString().value());
+
+		memset(&rgReaderStates, 0, sizeof(rgReaderStates));
+		rgReaderStates.szReader = (LPCWSTR)reader.value();
 		rgReaderStates.dwCurrentState = SCARD_STATE_UNAWARE;
 		rgReaderStates.dwEventState = SCARD_STATE_UNAWARE;
 
-		retV = SCardGetStatusChange(
-		    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
+		retV = SCardGetStatusChangeW(
+		    sCardContext->context,
 		    10,
 		    &rgReaderStates,
 		    1);
@@ -176,18 +274,28 @@ namespace XYO::QuantumScript::Extension::SCard {
 	};
 
 	static TPointer<Variable> connect(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-connect\n");
 #endif
 
 		LONG retV;
 		TPointer<SCardHandle> handle;
+		SCardContext *sCardContext;
+		StringUTF16 reader;
+
+		sCardContext = getContext(arguments->index(0));
+		if (!sCardContext->isOk) {
+			return VariableUndefined::newVariable();
+		};
+
+		reader = UTF::utf16FromUTF8((arguments->index(1))->toString().value());
 
 		handle.newMemory();
+		handle->sCardContext = sCardContext;
 
-		retV = SCardConnect(
-		    ((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context,
-		    (char *)(((arguments->index(1))->toString()).value()),
+		retV = SCardConnectW(
+		    sCardContext->context,
+		    (LPCWSTR)reader.value(),
 		    SCARD_SHARE_EXCLUSIVE,
 		    SCARD_PROTOCOL_Tx,
 		    &handle->handle,
@@ -195,114 +303,118 @@ namespace XYO::QuantumScript::Extension::SCard {
 		if (retV == SCARD_S_SUCCESS) {
 			handle->isOk = true;
 			handle->incReferenceCount();
-			return VariableResource::newVariable(handle.value(), NULL);
+			return VariableResource::newVariable(handle.value(), sCardHandleDelete);
 		};
 
 		return VariableUndefined::newVariable();
 	};
 
 	static TPointer<Variable> disconnect(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-disconnect\n");
 #endif
 
-		((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->close();
+		getHandle(arguments->index(0))->close();
 		return VariableBoolean::newVariable(true);
 	};
 
 	static TPointer<Variable> getAtrString(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-get-atr-string\n");
 #endif
 
 		LONG retV;
 		LPBYTE pbAttr;
 		DWORD pcbAttrLen;
-		unsigned int byteScan;
+		SCardHandle *handle;
+
+		// getAtrString(context, card) or getAtrString(card)
+		if (isResourceOf(arguments->index(0), sCardHandleDelete)) {
+			handle = getHandle(arguments->index(0));
+		} else {
+			getContext(arguments->index(0));
+			handle = getHandle(arguments->index(1));
+		};
+
+		if (!handle->isOk) {
+			return VariableUndefined::newVariable();
+		};
+		if (!handle->sCardContext->isOk) {
+			return VariableUndefined::newVariable();
+		};
 
 		pbAttr = NULL;
 		pcbAttrLen = SCARD_AUTOALLOCATE;
 		retV = SCardGetAttrib(
-		    ((SCardHandle *)(((VariableResource *)(arguments->index(1)).value())->resource))->handle,
+		    handle->handle,
 		    SCARD_ATTR_ATR_STRING,
 		    (LPBYTE)&pbAttr,
 		    &pcbAttrLen);
 		if (retV == SCARD_S_SUCCESS) {
-			char buf[4];
-			int k;
-			Variable *strValue = VariableString::newVariable("");
-			for (k = 0; k < pcbAttrLen; ++k) {
-				byteScan = pbAttr[k];
-				sprintf(buf, "%02X", byteScan);
-				((VariableString *)strValue)->value << (&buf[0]);
+			String atr;
+			if (pbAttr != NULL) {
+				atr = hexEncode(pbAttr, pcbAttrLen);
+				// Allocated by the resource manager of the card context
+				SCardFreeMemory(handle->sCardContext->context, pbAttr);
 			};
-			SCardFreeMemory(((SCardContext *)(((VariableResource *)(arguments->index(0)).value())->resource))->context, pbAttr);
-			return strValue;
+			return VariableString::newVariable(atr);
 		};
 		return VariableUndefined::newVariable();
 	};
 
 	static TPointer<Variable> transmit(VariableFunction *function, Variable *this_, VariableArray *arguments) {
-#ifdef QUANTUM_SCRIPT_VM_DEBUG_RUNTIME
+#ifdef XYO_QUANTUMSCRIPT_DEBUG_RUNTIME
 		printf("- scard-transmit\n");
 #endif
 
 		LONG retV;
 		LPCSCARD_IO_REQUEST pioSendPci;
-		DWORD dwActiveProtocol;
-		BYTE sendBuffer[4096];
-		DWORD sendLength;
-		BYTE recvBuffer[4096];
+		std::vector<BYTE> sendBuffer;
+		std::vector<BYTE> recvBuffer;
 		DWORD recvLength;
-		String inScan;
-		unsigned int byteScan;
-		SCARD_IO_REQUEST pioSendPciIO;
+		SCardHandle *handle;
 
-		dwActiveProtocol = ((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->dwActiveProtocol;
+		handle = getHandle(arguments->index(0));
 
-		switch (dwActiveProtocol) {
+		if (!hexDecode((arguments->index(1))->toString(), sendBuffer)) {
+			throw(Error("invalid parameter"));
+		};
+		if (sendBuffer.size() == 0) {
+			throw(Error("invalid parameter"));
+		};
+		if (sendBuffer.size() > transmitSendMax) {
+			throw(Error("invalid parameter"));
+		};
+
+		if (!handle->isOk) {
+			return VariableUndefined::newVariable();
+		};
+
+		switch (handle->dwActiveProtocol) {
 		case SCARD_PROTOCOL_T0:
 			pioSendPci = SCARD_PCI_T0;
-			pioSendPciIO = *SCARD_PCI_T0;
 			break;
 		case SCARD_PROTOCOL_T1:
 			pioSendPci = SCARD_PCI_T1;
-			pioSendPciIO = *SCARD_PCI_T1;
 			break;
 		default:
 			pioSendPci = SCARD_PCI_RAW;
-			pioSendPciIO = *SCARD_PCI_RAW;
 			break;
 		};
 
-		inScan = (arguments->index(1))->toString();
-		for (sendLength = 0; sendLength < (inScan.length() / 2); ++sendLength) {
-			if (sscanf((char *)(inScan.index(sendLength * 2)), "%02X", &byteScan) != 1) {
-				byteScan = 0;
-			};
-			sendBuffer[sendLength] = byteScan;
-		};
-
-		recvLength = 4096;
+		recvBuffer.resize(transmitReceiveMax);
+		recvLength = (DWORD)recvBuffer.size();
 
 		retV = SCardTransmit(
-		    ((SCardHandle *)(((VariableResource *)(arguments->index(0)).value())->resource))->handle,
+		    handle->handle,
 		    pioSendPci,
-		    sendBuffer,
-		    sendLength,
-		    &pioSendPciIO,
-		    recvBuffer,
+		    sendBuffer.data(),
+		    (DWORD)sendBuffer.size(),
+		    NULL,
+		    recvBuffer.data(),
 		    &recvLength);
 		if (retV == SCARD_S_SUCCESS) {
-			char buf[4];
-			int k;
-			Variable *strValue = VariableString::newVariable("");
-			for (k = 0; k < recvLength; ++k) {
-				byteScan = recvBuffer[k];
-				sprintf((char *)buf, "%02X", byteScan);
-				((VariableString *)strValue)->value << buf;
-			};
-			return strValue;
+			return VariableString::newVariable(hexEncode(recvBuffer.data(), recvLength));
 		};
 		return VariableUndefined::newVariable();
 	};
@@ -326,7 +438,7 @@ namespace XYO::QuantumScript::Extension::SCard {
 		executive->setFunction2("SCard.listReaders(context)", listReaders);
 		executive->setFunction2("SCard.getStatusChange(context,reader)", getStatusChange);
 		executive->setFunction2("SCard.connect(context,reader)", connect);
-		executive->setFunction2("SCard.disconect(card)", disconnect);
+		executive->setFunction2("SCard.disconnect(card)", disconnect);
 		executive->setFunction2("SCard.getAtrString(context,card)", getAtrString);
 		executive->setFunction2("SCard.transmit(card,string)", transmit);
 	};
